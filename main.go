@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/profiprog/res/filter"
+	"github.com/profiprog/res/version"
 )
 
 var fullOutput bool
@@ -69,6 +70,7 @@ func appendFiles(files []string, file string) []string {
 func pritnHelpAndExit() {
 	fmt.Printf("\x1b[1;4mUSAGE:\x1b[0m %s [-h] [-n] [-c] [-] [-i=FILE ...] [PATTERN ...]\n", os.Args[0])
 	fmt.Printf("  -h, --help             display this help and exit\n")
+	fmt.Printf("  -v, --version          prints version and exit\n")
 	fmt.Printf("  -                      list maching resources without printing yaml content\n")
 	fmt.Printf("  -n                     suppress comments referencing sources file\n")
 	fmt.Printf("  -c                     suppress colors in output\n")
@@ -114,6 +116,10 @@ func init() {
 			}
 			if os.Args[i] == "-h" || os.Args[i] == "--help" {
 				pritnHelpAndExit()
+			}
+			if os.Args[i] == "-v" || os.Args[i] == "--version" {
+				fmt.Printf("%s version %s\n", os.Args[0], version.Version)
+				os.Exit(0)
 			}
 			if os.Args[i] == "-c" {
 				colorOutput = false

@@ -1,0 +1,86 @@
+project_name: res
+
+before:
+  hooks:
+    - rm -rf dist res
+    - go mod tidy
+
+brews:
+  -
+    name: res
+    repository:
+      owner: profiprog
+      name: homebrew-tap
+    skip_upload: auto
+    homepage: https://github.com/profiprog/res
+    url_template: "https://github.com/profiprog/res/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    folder: Formula
+    caveats: "How to use this binary: https://github.com/profiprog/res"
+    description: "Example"
+    install: |
+      bin.install "res"
+    test: |
+      system "#{bin}/res"
+
+builds:
+  - env:
+      - CGO_ENABLED=0 # bez ceckovej podpory (vsetko je pure go, ziadne dependencie na systemove C kniznice)
+    goos:
+      - linux
+      - windows
+      - darwin
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s
+      - -w
+      - -X github.com/profiprog/res/version.Version=v{{.Version}}
+
+snapshot:
+  name_template: "{{ incminor .Version }}-dev"
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: "{{ .ProjectName }}_checksums.txt"
+  algorithm: sha256
+
+dockers:
+    - goos: linux
+      goarch: amd64
+      image_templates:
+        - "ghcr.io/profiprog/res:{{ .Tag }}-amd64"
+      dockerfile: Dockerfile
+      ids:
+        - res
+      build_flag_templates:
+        - "--platform=linux/amd64"
+    - goos: linux
+      goarch: arm64
+      image_templates:
+        - "ghcr.io/profiprog/res:{{ .Tag }}-arm64"
+      dockerfile: Dockerfile
+      ids:
+        - res
+      build_flag_templates:
+        - "--platform=linux/arm64"
+
+docker_manifests:
+- id: res
+  name_template: "ghcr.io/profiprog/res:{{ .Tag }}"
+  image_templates:
+  - "ghcr.io/profiprog/res:{{ .Tag }}-amd64"
+  - "ghcr.io/profiprog/res:{{ .Tag }}-arm64"
+- id: latest
+  name_template: "ghcr.io/profiprog/res:latest"
+  image_templates:
+  - "ghcr.io/profiprog/res:{{ .Tag }}-amd64"
+  - "ghcr.io/profiprog/res:{{ .Tag }}-arm64"
