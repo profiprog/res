@@ -9,6 +9,8 @@ import (
 
 	"gopkg.in/yaml.v2"
 
+	"github.com/goccy/go-yaml/lexer"
+	"github.com/goccy/go-yaml/printer"
 	"github.com/profiprog/res/filter"
 	"github.com/profiprog/res/version"
 )
@@ -189,13 +191,46 @@ func main() {
 					if showFileRef {
 						fmt.Printf("# file: %s\n", file)
 					}
-					fmt.Print(string(d))
+					printYaml(string(d))
 				} else {
 					printMachedResource(doc, file)
 				}
 			}
 		}
 	}
+}
+
+func printYaml(yaml string) {
+	if colorOutput {
+		tokens := lexer.Tokenize(yaml)
+		var p printer.Printer
+		p.Bool = func() *printer.Property {
+			return &printer.Property{
+				Prefix: "\x1b[0;33m",
+				Suffix: "\x1b[0m",
+			}
+		}
+		p.Number = func() *printer.Property {
+			return &printer.Property{
+				Prefix: "\x1b[0;35m",
+				Suffix: "\x1b[0m",
+			}
+		}
+		p.MapKey = func() *printer.Property {
+			return &printer.Property{
+				Prefix: "\x1b[0;36m",
+				Suffix: "\x1b[0m",
+			}
+		}
+		p.String = func() *printer.Property {
+			return &printer.Property{
+				Prefix: "\x1b[0;32m",
+				Suffix: "\x1b[0m",
+			}
+		}
+		yaml = p.PrintTokens(tokens) + "\n"
+	}
+	fmt.Print(yaml)
 }
 
 func printMachedResource(doc yaml.MapSlice, file string) {
