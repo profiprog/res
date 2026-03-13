@@ -5,9 +5,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	"github.com/goccy/go-yaml/lexer"
 	"github.com/goccy/go-yaml/printer"
@@ -21,8 +22,9 @@ var files []string
 var filters []*filter.ResourceFilter
 var colorOutput bool
 var showFileRef bool
+var sortOutput bool
 
-func matchAnyFilter(doc yaml.MapSlice) bool {
+func matchAnyFilter(doc *yaml.Node) bool {
 	if len(filters) == 0 {
 		return true
 	}
@@ -76,6 +78,8 @@ func pritnHelpAndExit() {
 	fmt.Printf("  -                      list maching resources without printing yaml content\n")
 	fmt.Printf("  -n                     suppress comments referencing sources file\n")
 	fmt.Printf("  -c                     suppress colors in output\n")
+	fmt.Printf("  -C                     always use colors in output\n")
+	fmt.Printf("  -s                     sort resources and keys\n")
 	fmt.Printf("  -i=<FILE>, -i <FILE>   input files or dirs, instead of stdin\n")
 	fmt.Printf("  --                     stop processing options\n")
 	fmt.Printf("\n\x1b[1;4mPATTERN:\x1b[0m\n")
@@ -104,6 +108,7 @@ func init() {
 	filters = []*filter.ResourceFilter{}
 	colorOutput = isStdoutTerminal()
 	showFileRef = true
+	sortOutput = false
 
 	// iterate over command line arguments
 	for i := 1; i < len(os.Args); i++ {
@@ -127,6 +132,14 @@ func init() {
 				colorOutput = false
 				continue
 			}
+			if os.Args[i] == "-C" {
+				colorOutput = true
+				continue
+			}
+			if os.Args[i] == "-s" {
+				sortOutput = true
+				continue
+			}
 			if os.Args[i] == "-n" {
 				showFileRef = false
 				continue
@@ -147,13 +160,13 @@ func init() {
 	if len(files) == 0 {
 		files = append(files, "")
 	}
-	if len(files) == 1 {
-		showFileRef = false
-	}
 }
 
 func main() {
+	nextComment := ""
 	matchCount := 0
+	keys := []string{}
+	basket := make(map[string]interface{})
 
 	for _, file := range files {
 		var decoder *yaml.Decoder
@@ -171,7 +184,7 @@ func main() {
 			decoder = yaml.NewDecoder(f)
 		}
 		for {
-			doc := yaml.MapSlice{}
+			doc := yaml.Node{}
 			if err := decoder.Decode(&doc); err != nil {
 				if err == io.EOF {
 					break
@@ -179,28 +192,94 @@ func main() {
 				fmt.Fprintf(os.Stderr, "error: document decode failed: %s\n", err)
 				os.Exit(1)
 			}
-			if isMaching := matchAnyFilter(doc); isMaching {
+			if doc.Content[0].Kind == yaml.ScalarNode {
+				nextComment = doc.FootComment
+				continue
+			}
+			if isMaching := matchAnyFilter(&doc); isMaching {
 				matchCount++
-				if fullOutput {
-					d, err := yaml.Marshal(&doc)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "error: document encode failed: %s\n", err)
-						os.Exit(1)
+				source := extractCommentSource(&doc, nextComment)
+				if sortOutput {
+					key := fmt.Sprintf("%s/%s", filter.GetKind(&doc), filter.GetName(&doc))
+					keys = append(keys, key)
+					if fullOutput {
+						sortNode(&doc)
+						basket[key] = formatYaml(&doc, file, source)
+					} else {
+						basket[key] = printMachedResource(&doc, file, source)
 					}
-					fmt.Println("---")
-					if showFileRef {
-						fmt.Printf("# file: %s\n", file)
-					}
-					printYaml(string(d))
+				} else if fullOutput {
+					fmt.Print(formatYaml(&doc, file, source))
 				} else {
-					printMachedResource(doc, file)
+					fmt.Print(printMachedResource(&doc, file, source))
 				}
 			}
+			nextComment = ""
+		}
+	}
+	if sortOutput {
+		sort.Strings(keys)
+		for _, key := range keys {
+			fmt.Print(basket[key])
 		}
 	}
 }
 
-func printYaml(yaml string) {
+func formatRefs(file string, source string) string {
+	result := ""
+	if file != "" {
+		result = fmt.Sprintf("%s# file: %s\n", result, file)
+	}
+	if source != "" && source != file {
+		result = fmt.Sprintf("%s# source: %s\n", result, source)
+	}
+	return result
+}
+
+func extractCommentSource(node *yaml.Node, preComment string) string {
+	lines := []string{}
+	result := ""
+	if preComment != "" {
+		for _, l := range strings.Split(preComment, "\n") {
+			if l != "" {
+				lines = append(lines, l)
+			}
+		}
+	}
+	for node.HeadComment == "" && (node.Kind == yaml.DocumentNode || node.Kind == yaml.MappingNode) && len(node.Content) > 0 {
+		node = node.Content[0]
+	}
+	if node.HeadComment != "" {
+		for _, l := range strings.Split(node.HeadComment, "\n") {
+			if l != "" {
+				lines = append(lines, l)
+			}
+		}
+		node.HeadComment = ""
+	}
+	if len(lines) > 0 {
+		rest := []string{}
+		for _, line := range lines {
+			if strings.HasPrefix(line, "# Source: ") {
+				result = line[10:]
+			} else {
+				rest = append(rest, line)
+			}
+		}
+		if len(rest) > 0 {
+			node.HeadComment = strings.Join(rest, "\n")
+		}
+	}
+	return result
+}
+
+func formatYaml(doc *yaml.Node, file string, source string) string {
+	bytes, err := yaml.Marshal(doc)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: document encode failed: %s\n", err)
+		os.Exit(1)
+	}
+	yaml := string(bytes)
 	if colorOutput {
 		tokens := lexer.Tokenize(yaml)
 		var p printer.Printer
@@ -230,22 +309,33 @@ func printYaml(yaml string) {
 		}
 		yaml = p.PrintTokens(tokens) + "\n"
 	}
-	fmt.Print(yaml)
+	if showFileRef {
+		return fmt.Sprintf("---\n%s%s", formatRefs(file, source), yaml)
+	}
+	return fmt.Sprintf("---\n%s", yaml)
 }
 
-func printMachedResource(doc yaml.MapSlice, file string) {
-	if colorOutput && showFileRef {
-		fmt.Printf("\x1b[0;35m%s\x1b[0;2m/\x1b[0;33m%s\t\x1b[0;2;3;32m# %s\x1b[0m\n", colorKind(doc), colorName(doc), file)
+func printMachedResource(doc *yaml.Node, file string, source string) string {
+	ref := ""
+	if showFileRef {
+		if file != "" {
+			ref = fmt.Sprintf("file: %s", file)
+		} else if source != "" {
+			ref = fmt.Sprintf("source: %s", source)
+		}
+	}
+	if colorOutput && ref != "" {
+		return fmt.Sprintf("\x1b[0;35m%s\x1b[0;2m/\x1b[0;33m%s\t\x1b[0;2;3;32m# %s\x1b[0m\n", colorKind(doc), colorName(doc), ref)
 	} else if colorOutput {
-		fmt.Printf("\x1b[0;35m%s\x1b[0;2m/\x1b[0;33m%s\x1b[0m\n", colorKind(doc), colorName(doc))
-	} else if showFileRef {
-		fmt.Printf("%s/%s\t# %s\n", filter.GetKind(doc), filter.GetName(doc), file)
+		return fmt.Sprintf("\x1b[0;35m%s\x1b[0;2m/\x1b[0;33m%s\x1b[0m\n", colorKind(doc), colorName(doc))
+	} else if ref != "" {
+		return fmt.Sprintf("%s/%s\t# %s\n", filter.GetKind(doc), filter.GetName(doc), ref)
 	} else {
-		fmt.Printf("%s/%s\n", filter.GetKind(doc), filter.GetName(doc))
+		return fmt.Sprintf("%s/%s\n", filter.GetKind(doc), filter.GetName(doc))
 	}
 }
 
-func colorKind(doc yaml.MapSlice) string {
+func colorKind(doc *yaml.Node) string {
 	kind := filter.GetKind(doc)
 	result := kind
 	rank := 0
@@ -258,7 +348,7 @@ func colorKind(doc yaml.MapSlice) string {
 	return result
 }
 
-func colorName(doc yaml.MapSlice) string {
+func colorName(doc *yaml.Node) string {
 	name := filter.GetName(doc)
 	result := name
 	rank := 0
@@ -269,4 +359,44 @@ func colorName(doc yaml.MapSlice) string {
 		}
 	}
 	return result
+}
+
+func sortNode(node *yaml.Node) {
+	// If it's a document, sort its root content
+	if node.Kind == yaml.DocumentNode {
+		for _, child := range node.Content {
+			sortNode(child)
+		}
+		return
+	}
+
+	// If it's a map, sort the key/value pairs
+	if node.Kind == yaml.MappingNode {
+		// Create a temporary slice of indices for the pairs
+		type pair struct {
+			key   *yaml.Node
+			value *yaml.Node
+		}
+		pairs := make([]pair, len(node.Content)/2)
+		for i := 0; i < len(node.Content); i += 2 {
+			pairs[i/2] = pair{node.Content[i], node.Content[i+1]}
+		}
+
+		// Sort pairs by the key's string value
+		sort.Slice(pairs, func(i, j int) bool {
+			return pairs[i].key.Value < pairs[j].key.Value
+		})
+
+		// Reconstruct the flattened Content slice
+		newContent := make([]*yaml.Node, 0, len(node.Content))
+		for _, p := range pairs {
+			newContent = append(newContent, p.key, p.value)
+		}
+		node.Content = newContent
+	}
+
+	// Recursively sort children (items in a list or values in a map)
+	for _, child := range node.Content {
+		sortNode(child)
+	}
 }

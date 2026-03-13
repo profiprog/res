@@ -1,3 +1,4 @@
+version: 2
 project_name: res
 
 before:
@@ -6,15 +7,14 @@ before:
     - go mod tidy
 
 brews:
-  -
-    name: res
+  - name: res
     repository:
       owner: profiprog
       name: homebrew-tap
     skip_upload: auto
     homepage: https://github.com/profiprog/res
     url_template: "https://github.com/profiprog/res/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
-    folder: Formula
+    directory: Formula # This DID change from 'folder' to 'directory'
     caveats: "How to use this binary: https://github.com/profiprog/res"
     description: "Example"
     install: |
@@ -54,33 +54,33 @@ checksum:
   algorithm: sha256
 
 dockers:
-    - goos: linux
-      goarch: amd64
-      image_templates:
-        - "ghcr.io/profiprog/res:{{ .Tag }}-amd64"
-      dockerfile: Dockerfile
-      ids:
-        - res
-      build_flag_templates:
-        - "--platform=linux/amd64"
-    - goos: linux
-      goarch: arm64
-      image_templates:
-        - "ghcr.io/profiprog/res:{{ .Tag }}-arm64"
-      dockerfile: Dockerfile
-      ids:
-        - res
-      build_flag_templates:
-        - "--platform=linux/arm64"
+  - goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/profiprog/res:{{ .Tag }}-amd64"
+    dockerfile: Dockerfile
+    ids:
+      - res
+    build_flag_templates:
+      - "--platform=linux/amd64"
+  - goos: linux
+    goarch: arm64
+    image_templates:
+      - "ghcr.io/profiprog/res:{{ .Tag }}-arm64"
+    dockerfile: Dockerfile
+    ids:
+      - res
+    build_flag_templates:
+      - "--platform=linux/arm64"
 
 docker_manifests:
-- id: res
-  name_template: "ghcr.io/profiprog/res:{{ .Tag }}"
-  image_templates:
-  - "ghcr.io/profiprog/res:{{ .Tag }}-amd64"
-  - "ghcr.io/profiprog/res:{{ .Tag }}-arm64"
-- id: latest
-  name_template: "ghcr.io/profiprog/res:latest"
-  image_templates:
-  - "ghcr.io/profiprog/res:{{ .Tag }}-amd64"
-  - "ghcr.io/profiprog/res:{{ .Tag }}-arm64"
+  - id: res
+    name_template: "ghcr.io/profiprog/res:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/profiprog/res:{{ .Tag }}-amd64"
+      - "ghcr.io/profiprog/res:{{ .Tag }}-arm64"
+  - id: latest
+    name_template: "ghcr.io/profiprog/res:latest"
+    image_templates:
+      - "ghcr.io/profiprog/res:{{ .Tag }}-amd64"
+      - "ghcr.io/profiprog/res:{{ .Tag }}-arm64"

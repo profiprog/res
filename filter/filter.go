@@ -3,7 +3,7 @@ package filter
 import (
 	"strings"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 type ResourceFilter struct {
@@ -23,7 +23,7 @@ func NewResourceFilter(pattern string) *ResourceFilter {
 	}
 }
 
-func (filter *ResourceFilter) Match(doc yaml.MapSlice) bool {
+func (filter *ResourceFilter) Match(doc *yaml.Node) bool {
 	return filter.kindMatcher(GetKind(doc)) && filter.nameMatcher(GetName(doc))
 }
 
@@ -107,37 +107,31 @@ func createHighliter(pattern string) func(string) (string, int) {
 }
 
 // access kind
-func GetKind(doc yaml.MapSlice) string {
-	for _, item := range doc {
-		// check if item is a map
-		if item.Value == nil {
-			continue
-		}
-		// check if item is a kind
-		if item.Key == "kind" {
-			return item.Value.(string)
-		}
-	}
-	return ""
+func GetKind(doc *yaml.Node) string {
+	return findValue(doc, "kind")
 }
 
 // access name nested in metadata
-func GetName(doc yaml.MapSlice) string {
-	for _, item := range doc {
-		// check if item is a map
-		if item.Value == nil {
-			continue
+func GetName(doc *yaml.Node) string {
+	return findValue(doc, "metadata", "name")
+}
+
+func findValue(node *yaml.Node, keys ...string) string {
+	if node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
+		node = node.Content[0]
+	}
+next_key:
+	for _, key := range keys {
+		if node.Kind != yaml.MappingNode {
+			return ""
 		}
-		// check if item is a metadata
-		if item.Key == "metadata" {
-			// iterate over metadata
-			for _, metadata := range item.Value.(yaml.MapSlice) {
-				// check if item is a name
-				if metadata.Key == "name" {
-					return metadata.Value.(string)
-				}
+		for i := 0; i < len(node.Content); i += 2 {
+			if node.Content[i].Value == key {
+				node = node.Content[i+1]
+				continue next_key
 			}
 		}
+		return ""
 	}
-	return ""
+	return node.Value
 }
