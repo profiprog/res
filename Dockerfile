@@ -1,4 +1,6 @@
 FROM scratch
+# ARG TARGETPLATFORM
+# COPY $TARGETPLATFORM/res /
 COPY res /
 ENTRYPOINT ["/res"]
 WORKDIR /work

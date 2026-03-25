@@ -23,6 +23,7 @@ var filters []*filter.ResourceFilter
 var colorOutput bool
 var showFileRef bool
 var sortOutput bool
+var normalizeOutput bool
 
 func matchAnyFilter(doc *yaml.Node) bool {
 	if len(filters) == 0 {
@@ -77,6 +78,7 @@ func pritnHelpAndExit() {
 	fmt.Printf("  -v, --version          prints version and exit\n")
 	fmt.Printf("  -                      list maching resources without printing yaml content\n")
 	fmt.Printf("  -n                     suppress comments referencing sources file\n")
+	fmt.Printf("  -N                     Normalize output (remove unecessary quotas, comments, ensure list as bulleted syntax)\n")
 	fmt.Printf("  -c                     suppress colors in output\n")
 	fmt.Printf("  -C                     always use colors in output\n")
 	fmt.Printf("  -s                     sort resources and keys\n")
@@ -138,6 +140,10 @@ func init() {
 			}
 			if os.Args[i] == "-s" {
 				sortOutput = true
+				continue
+			}
+			if os.Args[i] == "-N" {
+				normalizeOutput = true
 				continue
 			}
 			if os.Args[i] == "-n" {
@@ -202,6 +208,9 @@ func main() {
 				if sortOutput {
 					key := fmt.Sprintf("%s/%s", filter.GetKind(&doc), filter.GetName(&doc))
 					keys = append(keys, key)
+					if normalizeOutput {
+						normalizeNode(&doc)
+					}
 					if fullOutput {
 						sortNode(&doc)
 						basket[key] = formatYaml(&doc, file, source)
@@ -398,5 +407,20 @@ func sortNode(node *yaml.Node) {
 	// Recursively sort children (items in a list or values in a map)
 	for _, child := range node.Content {
 		sortNode(child)
+	}
+}
+
+func normalizeNode(n *yaml.Node) {
+	n.HeadComment = ""
+	n.LineComment = ""
+	n.FootComment = ""
+	switch n.Kind {
+	case yaml.ScalarNode:
+		n.Style = 0
+	case yaml.SequenceNode:
+		n.Style = 0
+	}
+	for _, child := range n.Content {
+		normalizeNode(child)
 	}
 }

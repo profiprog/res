@@ -16,7 +16,7 @@ brews:
     url_template: "https://github.com/profiprog/res/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     directory: Formula # This DID change from 'folder' to 'directory'
     caveats: "How to use this binary: https://github.com/profiprog/res"
-    description: "Example"
+    description: "Tool for filtering kubernetes resources defined in yaml"
     install: |
       bin.install "res"
     test: |
@@ -40,18 +40,32 @@ builds:
       - -X github.com/profiprog/res/version.Version=v{{.Version}}
 
 snapshot:
-  name_template: "{{ incminor .Version }}-dev"
+  version_template: "{{ incminor .Version }}-dev"
 
 archives:
-  - format: tar.gz
+  - formats: [ 'tar.gz' ]
     name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [ 'zip' ]
 
 checksum:
   name_template: "{{ .ProjectName }}_checksums.txt"
   algorithm: sha256
+
+# dockers_v2:
+#   - images:
+#       - "ghcr.io/profiprog/res"
+#     tags:
+#       - "{{ .Tag }}"
+#       - "latest"
+#     labels:
+#       "org.opencontainers.image.description": "Tool for filtering kubernetes resources defined in yaml"
+#       "org.opencontainers.image.created": "{{.Date}}"
+#       "org.opencontainers.image.name": "{{.ProjectName}}"
+#       "org.opencontainers.image.revision": "{{.FullCommit}}"
+#       "org.opencontainers.image.version": "{{.Version}}"
+#       "org.opencontainers.image.source": "{{.GitURL}}"
 
 dockers:
   - goos: linux
