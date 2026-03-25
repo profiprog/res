@@ -114,6 +114,7 @@ func init() {
 
 	// iterate over command line arguments
 	for i := 1; i < len(os.Args); i++ {
+		// fmt.Fprintf(os.Stderr, " %d> %s\n", i, os.Args[i])
 		if accpetMoreOptions {
 			if os.Args[i] == "--" {
 				accpetMoreOptions = false
@@ -160,14 +161,17 @@ func init() {
 				continue
 			}
 			if len(os.Args[i]) > 2 && os.Args[i][0] == '-' && os.Args[i][2] != '=' {
+				// fmt.Fprintf(os.Stderr, " : %s\n", strings.Join(os.Args, "\n : "))
 				expanded := make([]string, len(os.Args)+len(os.Args[i])-2)
 				copy(expanded, os.Args[:i])
 				for j, c := range os.Args[i][1:] {
 					expanded[i+j] = fmt.Sprintf("-%c", c)
 				}
-				copy(expanded, os.Args[(i+1):])
+				copy(expanded[i+len(os.Args[i])-1:], os.Args[(i+1):])
 				os.Args = expanded
 				i = i - 1
+				// fmt.Fprintf(os.Stderr, " | %s\n", strings.Join(os.Args, "\n | "))
+				continue
 			}
 		}
 		filters = append(filters, filter.NewResourceFilter(os.Args[i]))
